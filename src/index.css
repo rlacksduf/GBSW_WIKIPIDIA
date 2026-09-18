@@ -1,2 +1,21 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Gowun+Dodum&family=Nanum+Myeongjo:wght@700;800&display=swap');
-*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;min-width:320px;background:#f9faf7;color:#202d2c;font-family:Pretendard,'Gowun Dodum',Arial,sans-serif}button,input{font:inherit}button{cursor:pointer}
+@import url("https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Gowun+Dodum&family=Nanum+Myeongjo:wght@700;800&display=swap");
+* {
+  box-sizing: border-box;
+}
+html {
+  scroll-behavior: smooth;
+}
+body {
+  margin: 0;
+  min-width: 320px;
+  background: #f9faf7;
+  color: #202d2c;
+  font-family: Pretendard, "Gowun Dodum", Arial, sans-serif;
+}
+button,
+input {
+  font: inherit;
+}
+button {
+  cursor: pointer;
+}

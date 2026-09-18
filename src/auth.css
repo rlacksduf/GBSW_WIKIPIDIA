@@ -1,0 +1,133 @@
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: #102a2580;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+.auth-modal {
+  position: relative;
+  width: min(100%, 390px);
+  background: #fff;
+  border-radius: 18px;
+  padding: 34px;
+  box-shadow: 0 24px 60px #0b292140;
+  display: grid;
+  gap: 13px;
+}
+.auth-modal > .brand-mark {
+  margin-bottom: 3px;
+  width: 34px;
+  height: 34px;
+}
+.auth-modal h2 {
+  margin: 0;
+  color: #202d2c;
+  font: 800 24px "Nanum Myeongjo";
+  letter-spacing: -1.2px;
+}
+.auth-modal p {
+  margin: -5px 0 9px;
+  color: #74817e;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.auth-modal label {
+  display: grid;
+  gap: 6px;
+  color: #52615d;
+  font-size: 12px;
+  font-weight: 700;
+}
+.auth-modal input {
+  width: 100%;
+  border: 1px solid #d9e5e1;
+  border-radius: 8px;
+  padding: 11px 12px;
+  outline: 0;
+  color: #202d2c;
+  font-size: 13px;
+}
+.auth-modal input:focus {
+  border-color: #05b692;
+  box-shadow: 0 0 0 3px #d7f7ed;
+}
+.auth-submit {
+  border: 0;
+  border-radius: 8px;
+  background: #05b692;
+  color: #fff;
+  padding: 12px;
+  font-weight: 700;
+  margin-top: 5px;
+}
+.auth-submit:disabled {
+  opacity: 0.6;
+}
+.auth-switch {
+  border: 0;
+  background: none;
+  color: #07836c;
+  font-size: 12px;
+}
+.modal-close {
+  position: absolute;
+  right: 16px;
+  top: 16px;
+  border: 0;
+  background: none;
+  color: #82908b;
+}
+
+.composer-modal {
+  width: min(100%, 620px);
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+}
+.composer-modal textarea,
+.composer-modal select {
+  width: 100%;
+  border: 1px solid #d9e5e1;
+  border-radius: 8px;
+  padding: 11px 12px;
+  outline: 0;
+  color: #202d2c;
+  background: #fff;
+  font-size: 13px;
+}
+.composer-modal textarea {
+  min-height: 145px;
+  resize: vertical;
+  line-height: 1.6;
+}
+.composer-modal textarea:focus,
+.composer-modal select:focus {
+  border-color: #05b692;
+  box-shadow: 0 0 0 3px #d7f7ed;
+}
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.consent {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  color: #21665a !important;
+}
+.consent input {
+  width: 15px !important;
+  height: 15px;
+}
+@media (max-width: 520px) {
+  .auth-modal {
+    padding: 28px 22px;
+  }
+  .form-row {
+    grid-template-columns: 1fr;
+    gap: 13px;
+  }
+}
