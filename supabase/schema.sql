@@ -1,11 +1,18 @@
--- 경소위키 첫 버전 스키마. Supabase SQL Editor에서 한 번 실행하세요.
-create extension if not exists pgcrypto;
+-- 신규 설치 및 재실행 가능. 기존 데이터는 보존합니다.
+begin;
 
+
+do $$ begin
 create type public.user_role as enum ('user', 'admin');
+exception when duplicate_object then null; end $$;
+do $$ begin
 create type public.document_status as enum ('draft', 'published', 'hidden');
+exception when duplicate_object then null; end $$;
+do $$ begin
 create type public.document_type as enum ('student', 'teacher', 'club', 'project', 'event', 'place', 'term', 'other');
+exception when duplicate_object then null; end $$;
 
-create table public.profiles (
+create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   nickname text not null unique check (char_length(nickname) between 2 and 20),
   avatar_url text,
@@ -19,7 +26,7 @@ create table public.profiles (
   updated_at timestamptz not null default now()
 );
 
-create table public.categories (
+create table if not exists public.categories (
   id uuid primary key default gen_random_uuid(),
   name text not null unique,
   slug text not null unique,
@@ -29,9 +36,10 @@ create table public.categories (
 insert into public.categories (name, slug, sort_order) values
   ('학생', 'student', 10), ('선생님', 'teacher', 20), ('동아리', 'club', 30),
   ('프로젝트', 'project', 40), ('교내 행사', 'event', 50), ('학교 장소', 'place', 60),
-  ('학교 용어', 'term', 70), ('기타', 'other', 80);
+  ('학교 용어', 'term', 70), ('기타', 'other', 80)
+on conflict do nothing;
 
-create table public.documents (
+create table if not exists public.documents (
   id uuid primary key default gen_random_uuid(),
   title text not null check (char_length(title) between 1 and 120),
   slug text not null unique check (slug ~ '^[a-z0-9-]+$'),
@@ -52,7 +60,7 @@ create table public.documents (
   updated_at timestamptz not null default now()
 );
 
-create table public.document_revisions (
+create table if not exists public.document_revisions (
   id uuid primary key default gen_random_uuid(),
   document_id uuid not null references public.documents(id) on delete cascade,
   editor_id uuid references public.profiles(id) on delete set null,
@@ -64,14 +72,14 @@ create table public.document_revisions (
   unique (document_id, revision_number)
 );
 
-create table public.tags (id uuid primary key default gen_random_uuid(), name text not null unique check (char_length(name) between 1 and 30));
-create table public.document_tags (
+create table if not exists public.tags (id uuid primary key default gen_random_uuid(), name text not null unique check (char_length(name) between 1 and 30));
+create table if not exists public.document_tags (
   document_id uuid references public.documents(id) on delete cascade,
   tag_id uuid references public.tags(id) on delete cascade,
   primary key (document_id, tag_id)
 );
 
-create table public.comments (
+create table if not exists public.comments (
   id uuid primary key default gen_random_uuid(),
   document_id uuid not null references public.documents(id) on delete cascade,
   author_id uuid not null references public.profiles(id),
@@ -81,16 +89,19 @@ create table public.comments (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
-create table public.comment_likes (
+create table if not exists public.comment_likes (
   comment_id uuid references public.comments(id) on delete cascade,
   user_id uuid references public.profiles(id) on delete cascade,
   created_at timestamptz not null default now(),
   primary key (comment_id, user_id)
 );
 
-create index documents_search_idx on public.documents using gin (to_tsvector('simple', title || ' ' || coalesce(summary, '') || ' ' || content));
-create index comments_document_idx on public.comments(document_id, created_at);
-create index revisions_document_idx on public.document_revisions(document_id, revision_number desc);
+create index if not exists documents_search_idx on public.documents using gin (to_tsvector('simple', title || ' ' || coalesce(summary, '') || ' ' || content));
+create index if not exists comments_document_idx on public.comments(document_id, created_at);
+create index if not exists revisions_document_idx on public.document_revisions(document_id, revision_number desc);
+
+alter table public.profiles add column if not exists cohort smallint check (cohort between 1 and 2);
+alter table public.documents add column if not exists edit_summary text check (char_length(edit_summary) <= 300);
 
 -- 보안 확인용 함수. security definer로 profiles RLS 재귀를 피합니다.
 create or replace function public.is_admin() returns boolean language sql stable security definer set search_path = public as $$
@@ -105,11 +116,15 @@ begin
   insert into public.profiles (id, nickname) values (new.id, coalesce(nullif(new.raw_user_meta_data ->> 'nickname', ''), 'user-' || left(new.id::text, 8)));
   return new;
 end; $$;
+drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created after insert on auth.users for each row execute procedure public.handle_new_user();
 
 create or replace function public.set_updated_at() returns trigger language plpgsql as $$ begin new.updated_at = now(); return new; end; $$;
+drop trigger if exists profiles_updated on public.profiles;
 create trigger profiles_updated before update on public.profiles for each row execute procedure public.set_updated_at();
+drop trigger if exists documents_updated on public.documents;
 create trigger documents_updated before update on public.documents for each row execute procedure public.set_updated_at();
+drop trigger if exists comments_updated on public.comments;
 create trigger comments_updated before update on public.comments for each row execute procedure public.set_updated_at();
 
 -- 모든 문서 생성·수정은 자동으로 버전 보관합니다.
@@ -120,6 +135,7 @@ begin
     coalesce((select max(revision_number) + 1 from public.document_revisions where document_id = new.id), 1));
   return new;
 end; $$;
+drop trigger if exists document_revision_after_write on public.documents;
 create trigger document_revision_after_write after insert or update of title, content on public.documents for each row execute procedure public.save_document_revision();
 
 create or replace function public.increment_document_view(target_id uuid) returns void language plpgsql security definer set search_path = public as $$
@@ -133,6 +149,7 @@ begin
   end if;
   return new;
 end; $$;
+drop trigger if exists comments_limit_depth on public.comments;
 create trigger comments_limit_depth before insert on public.comments for each row execute procedure public.limit_comment_depth();
 
 alter table public.profiles enable row level security;
@@ -144,29 +161,65 @@ alter table public.document_tags enable row level security;
 alter table public.comments enable row level security;
 alter table public.comment_likes enable row level security;
 
+drop policy if exists "profiles readable to members" on public.profiles;
 create policy "profiles readable to members" on public.profiles for select to authenticated using (true);
+drop policy if exists "profile self update" on public.profiles;
 create policy "profile self update" on public.profiles for update to authenticated using (id = auth.uid() and role = 'user') with check (id = auth.uid() and role = 'user');
+drop policy if exists "admin manages profiles" on public.profiles;
 create policy "admin manages profiles" on public.profiles for all to authenticated using (public.is_admin()) with check (public.is_admin());
+drop policy if exists "categories public read" on public.categories;
 create policy "categories public read" on public.categories for select using (true);
+drop policy if exists "admin manages categories" on public.categories;
 create policy "admin manages categories" on public.categories for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
+drop policy if exists "only public documents are readable" on public.documents;
 create policy "only public documents are readable" on public.documents for select using (
   (status = 'published' and (document_type not in ('student','teacher') or subject_consent))
   or author_id = auth.uid() or public.is_admin()
 );
+drop policy if exists "active users create their documents" on public.documents;
 create policy "active users create their documents" on public.documents for insert to authenticated with check (author_id = auth.uid() and public.is_active_user());
+drop policy if exists "author edits unlocked document" on public.documents;
 create policy "author edits unlocked document" on public.documents for update to authenticated using ((author_id = auth.uid() and not is_locked and public.is_active_user()) or public.is_admin()) with check ((author_id = auth.uid() and not is_locked and public.is_active_user()) or public.is_admin());
+drop policy if exists "admin deletes documents" on public.documents;
 create policy "admin deletes documents" on public.documents for delete to authenticated using (public.is_admin());
 
+drop policy if exists "visible revisions readable" on public.document_revisions;
 create policy "visible revisions readable" on public.document_revisions for select using (exists (select 1 from public.documents d where d.id = document_id));
+drop policy if exists "tags public read" on public.tags;
 create policy "tags public read" on public.tags for select using (true);
+drop policy if exists "admin manages tags" on public.tags;
 create policy "admin manages tags" on public.tags for all to authenticated using (public.is_admin()) with check (public.is_admin());
+drop policy if exists "document tags public read" on public.document_tags;
 create policy "document tags public read" on public.document_tags for select using (true);
+drop policy if exists "authors manage document tags" on public.document_tags;
 create policy "authors manage document tags" on public.document_tags for all to authenticated using (exists (select 1 from public.documents d where d.id = document_id and (d.author_id = auth.uid() or public.is_admin()))) with check (exists (select 1 from public.documents d where d.id = document_id and (d.author_id = auth.uid() or public.is_admin())));
 
+drop policy if exists "visible comments readable" on public.comments;
 create policy "visible comments readable" on public.comments for select using (not is_hidden or author_id = auth.uid() or public.is_admin());
+drop policy if exists "active users write comments" on public.comments;
 create policy "active users write comments" on public.comments for insert to authenticated with check (author_id = auth.uid() and public.is_active_user());
+drop policy if exists "authors update own comments" on public.comments;
 create policy "authors update own comments" on public.comments for update to authenticated using (author_id = auth.uid() or public.is_admin()) with check ((author_id = auth.uid() and not is_hidden) or public.is_admin());
+drop policy if exists "authors or admins delete comments" on public.comments;
 create policy "authors or admins delete comments" on public.comments for delete to authenticated using (author_id = auth.uid() or public.is_admin());
+drop policy if exists "likes readable" on public.comment_likes;
 create policy "likes readable" on public.comment_likes for select using (true);
+drop policy if exists "members manage own likes" on public.comment_likes;
 create policy "members manage own likes" on public.comment_likes for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid() and public.is_active_user());
+
+-- 스키마 설치 전에 가입한 회원도 문서를 작성할 수 있도록 프로필을 보충합니다.
+insert into public.profiles (id, nickname)
+select id, 'user-' || left(replace(id::text, '-', ''), 15)
+from auth.users
+on conflict do nothing;
+
+grant usage on schema public to anon, authenticated;
+grant select on public.categories, public.documents, public.document_revisions,
+  public.tags, public.document_tags, public.comments, public.comment_likes to anon;
+grant select, insert, update, delete on public.profiles, public.categories,
+  public.documents, public.document_revisions, public.tags, public.document_tags,
+  public.comments, public.comment_likes to authenticated;
+
+notify pgrst, 'reload schema';
+commit;

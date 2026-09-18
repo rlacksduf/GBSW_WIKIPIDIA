@@ -24,6 +24,11 @@ const emptyDoc = {
 };
 const now = (value) =>
   new Date(value || Date.now()).toLocaleDateString("ko-KR");
+const readableError = (message = "") =>
+  message.includes("Could not find the table") ||
+  message.includes("schema cache")
+    ? "Supabase에 문서 테이블이 없어요. SQL Editor에서 supabase/schema.sql 전체를 실행한 뒤 다시 시도해 주세요."
+    : message;
 
 function Logo() {
   return (
@@ -61,7 +66,7 @@ function AuthModal({ mode, close, toast }) {
             password: form.password,
           });
     setBusy(false);
-    if (result.error) return toast(result.error.message);
+    if (result.error) return toast(readableError(result.error.message));
     close();
     toast(
       mode === "signup" ? "인증 메일을 확인해 주세요." : "로그인되었습니다.",
@@ -439,7 +444,7 @@ function DocumentPage({ id, user, profile, openEdit, toast, refresh }) {
       parent_id: parentId,
       content: reply,
     });
-    if (error) return toast(error.message);
+    if (error) return toast(readableError(error.message));
     setReply("");
     load();
   };
@@ -965,7 +970,7 @@ function App() {
         slug: `doc-${crypto.randomUUID().slice(0, 8)}`,
         status: "published",
       }));
-    if (error) return flash(error.message);
+    if (error) return flash(readableError(error.message));
     setModal(null);
     flash(editing ? "문서를 수정했어요." : "문서를 등록했어요.");
     load();
